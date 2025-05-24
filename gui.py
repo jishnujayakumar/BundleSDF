@@ -167,9 +167,6 @@ class BundleSdfGui:
       self.update_render_mesh()
 
 
-
-
-
   def update_mesh(self, mesh):
     self.mesh = mesh
     self.clean_mesh()

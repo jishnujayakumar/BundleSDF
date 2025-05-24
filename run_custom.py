@@ -22,6 +22,7 @@ def run_one_video(video_dir='/home/bowen/debug/2022-11-18-15-10-24_milk', out_fo
 
   cfg_bundletrack = yaml.load(open(f"{code_dir}/BundleTrack/config_ho3d.yml",'r'))
   cfg_bundletrack['SPDLOG'] = int(args.debug_level)
+  # cfg_bundletrack['depth_processing']["zfar"] = 1
   cfg_bundletrack['depth_processing']["percentile"] = 95
   cfg_bundletrack['erode_mask'] = 3
   cfg_bundletrack['debug_dir'] = out_folder+'/'
@@ -73,7 +74,7 @@ def run_one_video(video_dir='/home/bowen/debug/2022-11-18-15-10-24_milk', out_fo
     color_file = reader.color_files[i]
     color = cv2.imread(color_file)
     H0, W0 = color.shape[:2]
-    depth = reader.get_depth(i)
+    depth = reader.get_depth(i)# * 1000
     H,W = depth.shape[:2]
     color = cv2.resize(color, (W,H), interpolation=cv2.INTER_NEAREST)
     depth = cv2.resize(depth, (W,H), interpolation=cv2.INTER_NEAREST)
@@ -99,11 +100,15 @@ def run_one_video(video_dir='/home/bowen/debug/2022-11-18-15-10-24_milk', out_fo
 
     K = reader.K.copy()
 
+    # import pdb; pdb.set_trace()
+
+    print(K)
+
     tracker.run(color, depth, K, id_str, mask=mask, occ_mask=None, pose_in_model=pose_in_model)
 
   tracker.on_finish()
 
-  run_one_video_global_nerf(out_folder=out_folder)
+  # run_one_video_global_nerf(out_folder=out_folder)
 
 
 
