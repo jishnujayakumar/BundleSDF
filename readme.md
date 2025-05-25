@@ -38,7 +38,10 @@ python run_custom.py --video_dir <root> --out_folder <root/out/bundlesdf>
 ```
 cd docker && bash run_container.sh
 
+docker exec -it bundlesdf bash
+
 # Inside docker container, compile the packages which are machine dependent
+# cd the the BunsdleSDF dir
 bash build.sh # will take some time
 ```
 
