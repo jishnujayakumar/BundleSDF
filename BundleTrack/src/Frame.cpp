@@ -94,7 +94,7 @@ void Frame::init()
       }
     }
     _color = tmp;
-    printf("Converted gray to RGB, new color size (%dx%dx%d)\n",_color.rows,_color.cols,_color.channels());
+    // printf("Converted gray to RGB, new color size (%dx%dx%d)\n",_color.rows,_color.cols,_color.channels());
   }
   _color_raw = _color.clone();
 
