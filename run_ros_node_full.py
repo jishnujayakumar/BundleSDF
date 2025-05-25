@@ -112,7 +112,10 @@ if __name__ == "__main__":
     print(f"camera intrinsics: {K}")
 
     is_first_frame = True
-
+    first_frame_pose = np.eye(4,4)
+    ob_in_cam_dir = f"{out_folder}/ob_in_cam"
+    os.makedirs(ob_in_cam_dir, exist_ok=True)
+    
     for i in range(0, len(reader.color_files), args.stride):
         if rospy.is_shutdown():
             break
@@ -161,6 +164,7 @@ if __name__ == "__main__":
                 if is_first_frame:
                     row0_rgb = np.array(_frames["row0"]["rgb"])[..., :3]
                     row0_masked_rgb = np.array(_frames["row0"]["masked_rgb"])[..., :3]
+                    first_frame_pose = _pose_in_model
                     is_first_frame = False
                 row1_rgb = np.array(_frames["row1"]["rgb"])[..., :3]
                 row1_masked_rgb = np.array(_frames["row1"]["masked_rgb"])[..., :3]
@@ -189,7 +193,22 @@ if __name__ == "__main__":
                 rospy.loginfo(f"Published images for frame {id_str}")
             except Exception as e:
                 rospy.logerr(f"Error publishing images: {e}")
-
+        
+        posetxt_filename = f"{ob_in_cam_dir}/{_filename.split('.')[0]}.txt"
+        np.savetxt(posetxt_filename, _pose_in_model)
         print(_pose_in_model)
+
+    #  publish multi array
+    from std_msgs.msg import Float64MultiArray
+    pub = rospy.Publisher('/bundleSDF/poses', Float64MultiArray, queue_size=10)
+    msg = Float64MultiArray()
+    msg.data = np.concatenate((first_frame_pose.flatten(), _pose_in_model.flatten())).tolist()
+    
+    # publishing 5 times just for subscribing reliably
+    for _ in range(5):
+        rospy.loginfo("Publishing...")
+        pub.publish(msg)
+        rospy.sleep(0.1)  # Small delay between publishes
+
 
     tracker.on_finish()

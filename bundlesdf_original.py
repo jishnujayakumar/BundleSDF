@@ -27,11 +27,10 @@ except:
 def run_gui(gui_dict, gui_lock):
   print("GUI started")
   with gui_lock:
-    gui = BundleSdfGui(img_height=300)
+    gui = BundleSdfGui(img_height=200)
     gui_dict['started'] = True
 
   local_dict = {}
-  # import pdb; pdb.set_trace()
 
   while dpg.is_dearpygui_running():
     with gui_lock:
@@ -52,9 +51,11 @@ def run_gui(gui_dict, gui_lock):
 
     if 'color' in local_dict:
       gui.update_frame(rgb=local_dict['color'], mask=local_dict['mask'], ob_in_cam=local_dict['ob_in_cam'], id_str=local_dict['id_str'], K=local_dict['K'], n_keyframe=local_dict['n_keyframe'])
+
     local_dict = {}
 
     dpg.render_dearpygui_frame()
+    time.sleep(0.03)
 
   dpg.destroy_context()
 
@@ -200,7 +201,7 @@ def run_nerf(p_dict, kf_to_nerf_list, lock, cfg_nerf, translation, sc_factor, st
 
     # cfg_nerf['sampled_frame_ids'] = np.arange(len(rgbs_all))
 
-    
+
     if SPDLOG>=2:
       np.savetxt(f"{cfg_nerf['save_dir']}/trainval_poses.txt",glcam_in_obs.reshape(-1,4))
       np.savetxt(f"{debug_dir}/{frame_id}/poses_before_nerf.txt",np.array(cam_in_obs).reshape(-1,4))
@@ -302,8 +303,8 @@ class BundleSdf:
     self.p_dict['nerf_num_frames'] = 0
 
     self.p_dict['SPDLOG'] = self.SPDLOG
-    # self.p_nerf = multiprocessing.Process(target=run_nerf, args=(self.p_dict, self.kf_to_nerf_list, self.lock, self.cfg_nerf, self.translation, self.sc_factor, start_nerf_keyframes, self.use_gui, self.gui_lock, self.gui_dict, self.debug_dir))
-    # self.p_nerf.start()
+    self.p_nerf = multiprocessing.Process(target=run_nerf, args=(self.p_dict, self.kf_to_nerf_list, self.lock, self.cfg_nerf, self.translation, self.sc_factor, start_nerf_keyframes, self.use_gui, self.gui_lock, self.gui_dict, self.debug_dir))
+    self.p_nerf.start()
 
     # self.p_dict = {}
     # self.lock = threading.Lock()
@@ -320,76 +321,24 @@ class BundleSdf:
     self.mesh = None
 
 
-  def get_frame_viz(self, rgb, mask, ob_in_cam, id_str, K, n_keyframe, return_type='numpy'):
-      """
-      Process input RGB image and mask, return images for row0 and row1 without DPG.
-
-      Args:
-          rgb: Input RGB image (NumPy array, shape (H, W, 3)).
-          mask: Binary mask (NumPy array, shape (H, W)).
-          ob_in_cam: Camera pose (4x4 transformation matrix).
-          id_str: Frame ID string.
-          K: Camera intrinsic matrix.
-          n_keyframe: Number of keyframes.
-          return_type: 'numpy' or 'pil' to specify output format.
-
-      Returns:
-          dict: {'row0': {'rgb': img, 'masked_rgb': img}, 'row1': {'rgb': img, 'masked_rgb': img}}
-          where img is a NumPy array (H, W, 4) or PIL Image in RGBA format.
-      """
-      if self.K is None:
-          self.K = K.copy()
-      H, W = rgb.shape[0], rgb.shape[1]
-      scale = 1/rgb.shape[0]*H
-      W = int(rgb.shape[1]*scale)
-      self.K[:2] *= scale
-
-      self.ob_in_cam = ob_in_cam
-      self.ob_in_cam_view = self.ob_in_cam.copy()
-
-      # Process images
-      rgb = cv2.resize(rgb, dsize=(W, H), interpolation=cv2.INTER_LINEAR)
-      mask = cv2.resize(mask, dsize=(W, H), interpolation=cv2.INTER_NEAREST)
-      vis = draw_xyz_axis(rgb[...,::-1], ob_in_cam=ob_in_cam, scale=0.1, K=self.K, transparency=0, thickness=5)
-      vis = vis[...,::-1]
-      rgba = np.concatenate((vis, np.ones((H, W, 1))*255), axis=-1).astype(np.uint8)
-      masked_rgba = np.concatenate((rgb, np.ones((H, W, 1))*255), axis=-1).astype(np.uint8)
-      masked_rgba[mask==0,...,:3] = 0
-
-      # Prepare return images
-      images = {
-          'row0': {'rgb': rgba, 'masked_rgb': masked_rgba},
-          'row1': {'rgb': rgba, 'masked_rgb': masked_rgba}
-      }
-
-      if return_type == 'pil':
-          images['row0']['rgb'] = Image.fromarray(rgba, 'RGBA')
-          images['row0']['masked_rgb'] = Image.fromarray(masked_rgba, 'RGBA')
-          images['row1']['rgb'] = Image.fromarray(rgba, 'RGBA')
-          images['row1']['masked_rgb'] = Image.fromarray(masked_rgba, 'RGBA')
-
-      return images
-
-
   def on_finish(self):
     if self.use_gui:
       with self.gui_lock:
         self.gui_dict['join'] = True
       self.gui_worker.join()
 
-    # with self.lock:
-    #   self.p_dict['join'] = True
-    # self.p_nerf.join()
-    # with self.lock:
-    #   if self.p_dict['running']==False and 'optimized_cvcam_in_obs' in self.p_dict:
-    #     for i_f in range(len(self.p_dict['optimized_cvcam_in_obs'])):
-    #       self.bundler._keyframes[i_f]._pose_in_model = self.p_dict['optimized_cvcam_in_obs'][i_f]
-    #       self.bundler._keyframes[i_f]._nerfed = True
-        # del self.p_dict['optimized_cvcam_in_obs']
+    with self.lock:
+      self.p_dict['join'] = True
+    self.p_nerf.join()
+    with self.lock:
+      if self.p_dict['running']==False and 'optimized_cvcam_in_obs' in self.p_dict:
+        for i_f in range(len(self.p_dict['optimized_cvcam_in_obs'])):
+          self.bundler._keyframes[i_f]._pose_in_model = self.p_dict['optimized_cvcam_in_obs'][i_f]
+          self.bundler._keyframes[i_f]._nerfed = True
+        del self.p_dict['optimized_cvcam_in_obs']
 
 
   def make_frame(self, color, depth, K, id_str, mask=None, occ_mask=None, pose_in_model=np.eye(4)):
-    print(depth)
     H,W = color.shape[:2]
     roi = [0,W-1,0,H-1]
     frame = my_cpp.Frame(color,depth,roi,pose_in_model,self.cnt,id_str,K,self.bundler.yml)
@@ -499,6 +448,7 @@ class BundleSdf:
       visibles = np.array(visibles)
       ids = np.argsort(visibles)[::-1]
       found = False
+      # pdb.set_trace()
       for id in ids:
         kf = self.bundler._keyframes[id]
         logging.info(f"trying new ref frame {kf._id_str}")
@@ -555,6 +505,56 @@ class BundleSdf:
 
     self.bundler.checkAndAddKeyframe(frame)
 
+  def get_frame_viz(self, rgb, mask, ob_in_cam, id_str, K, n_keyframe, return_type='numpy'):
+      """
+      Process input RGB image and mask, return images for row0 and row1 without DPG.
+
+      Args:
+          rgb: Input RGB image (NumPy array, shape (H, W, 3)).
+          mask: Binary mask (NumPy array, shape (H, W)).
+          ob_in_cam: Camera pose (4x4 transformation matrix).
+          id_str: Frame ID string.
+          K: Camera intrinsic matrix.
+          n_keyframe: Number of keyframes.
+          return_type: 'numpy' or 'pil' to specify output format.
+
+      Returns:
+          dict: {'row0': {'rgb': img, 'masked_rgb': img}, 'row1': {'rgb': img, 'masked_rgb': img}}
+          where img is a NumPy array (H, W, 4) or PIL Image in RGBA format.
+      """
+      if self.K is None:
+          self.K = K.copy()
+      H, W = rgb.shape[0], rgb.shape[1]
+      scale = 1/rgb.shape[0]*H
+      W = int(rgb.shape[1]*scale)
+      self.K[:2] *= scale
+
+      self.ob_in_cam = ob_in_cam
+      self.ob_in_cam_view = self.ob_in_cam.copy()
+
+      # Process images
+      rgb = cv2.resize(rgb, dsize=(W, H), interpolation=cv2.INTER_LINEAR)
+      mask = cv2.resize(mask, dsize=(W, H), interpolation=cv2.INTER_NEAREST)
+      vis = draw_xyz_axis(rgb[...,::-1], ob_in_cam=ob_in_cam, scale=0.1, K=self.K, transparency=0, thickness=5)
+      vis = vis[...,::-1]
+      rgba = np.concatenate((vis, np.ones((H, W, 1))*255), axis=-1).astype(np.uint8)
+      masked_rgba = np.concatenate((rgb, np.ones((H, W, 1))*255), axis=-1).astype(np.uint8)
+      masked_rgba[mask==0,...,:3] = 0
+
+      # Prepare return images
+      images = {
+          'row0': {'rgb': rgba, 'masked_rgb': masked_rgba},
+          'row1': {'rgb': rgba, 'masked_rgb': masked_rgba}
+      }
+
+      if return_type == 'pil':
+          images['row0']['rgb'] = Image.fromarray(rgba, 'RGBA')
+          images['row0']['masked_rgb'] = Image.fromarray(masked_rgba, 'RGBA')
+          images['row1']['rgb'] = Image.fromarray(rgba, 'RGBA')
+          images['row1']['masked_rgb'] = Image.fromarray(masked_rgba, 'RGBA')
+
+      return images
+
 
 
   def run(self, color, depth, K, id_str, mask=None, occ_mask=None, pose_in_model=np.eye(4)):
@@ -577,18 +577,12 @@ class BundleSdf:
 
     H,W = color.shape[:2]
 
-    # import pdb; pdb.set_trace()
-
     percentile = self.cfg_track['depth_processing']["percentile"]
     if percentile<100:   # Denoise
       logging.info("percentile denoise start")
       valid = (depth>=0.1) & (mask>0)
-
-      # import ipdb; ipdb.set_trace()
-
       thres = np.percentile(depth[valid], percentile)
       depth[depth>=thres] = 0
-
       logging.info("percentile denoise done")
 
     frame = self.make_frame(color, depth, K, id_str, mask, occ_mask, pose_in_model)
@@ -619,29 +613,28 @@ class BundleSdf:
           cam_in_obs.append(np.array(f._pose_in_model).copy())
         self.p_dict['cam_in_obs'] = np.array(cam_in_obs)
 
-      # if self.SPDLOG>=2:
-      #   with open(f"{self.debug_dir}/{frame._id_str}/nerf_frames.txt",'w') as ff:
-      #     for f in self.bundler._keyframes:
-      #       ff.write(f"{f._id_str}\n")
+      if self.SPDLOG>=2:
+        with open(f"{self.debug_dir}/{frame._id_str}/nerf_frames.txt",'w') as ff:
+          for f in self.bundler._keyframes:
+            ff.write(f"{f._id_str}\n")
 
       ############# Wait for sync
-      # while 1:
-      #   with self.lock:
-      #     running = self.p_dict['running']
-      #     nerf_num_frames = self.p_dict['nerf_num_frames']
-      #   if not running:
-      #     break
-      #   if len(self.bundler._keyframes)-nerf_num_frames>=self.cfg_nerf['sync_max_delay']:
-      #     time.sleep(0.01)
-      #     # logging.info(f"wait for sync len(self.bundler._keyframes):{len(self.bundler._keyframes)}, nerf_num_frames:{nerf_num_frames}")
-      #     continue
-      #   break
+      while 1:
+        with self.lock:
+          running = self.p_dict['running']
+          nerf_num_frames = self.p_dict['nerf_num_frames']
+        if not running:
+          break
+        if len(self.bundler._keyframes)-nerf_num_frames>=self.cfg_nerf['sync_max_delay']:
+          time.sleep(0.01)
+          # logging.info(f"wait for sync len(self.bundler._keyframes):{len(self.bundler._keyframes)}, nerf_num_frames:{nerf_num_frames}")
+          continue
+        break
 
     rematch_after_nerf = self.cfg_track["feature_corres"]["rematch_after_nerf"]
     logging.info(f"rematch_after_nerf: {rematch_after_nerf}")
     frames_large_update = []
     with self.lock:
-      # import pdb; pdb.set_trace()
       if 'optimized_cvcam_in_obs' in self.p_dict:
         for i_f in range(len(self.p_dict['optimized_cvcam_in_obs'])):
           if rematch_after_nerf:
@@ -653,32 +646,30 @@ class BundleSdf:
           self.bundler._keyframes[i_f]._pose_in_model = self.p_dict['optimized_cvcam_in_obs'][i_f]
           self.bundler._keyframes[i_f]._nerfed = True
         logging.info(f"synced pose from nerf, latest nerf frame {self.bundler._keyframes[len(self.p_dict['optimized_cvcam_in_obs'])-1]._id_str}")
-
         del self.p_dict['optimized_cvcam_in_obs']
 
-      # if self.use_gui:
-      #   with self.gui_lock:
-      #     if 'mesh' in self.p_dict:
-      #       self.gui_dict['mesh'] = self.p_dict['mesh']
-      #       del self.p_dict['mesh']
+      if self.use_gui:
+        with self.gui_lock:
+          if 'mesh' in self.p_dict:
+            self.gui_dict['mesh'] = self.p_dict['mesh']
+            del self.p_dict['mesh']
 
-    # if rematch_after_nerf:
-    #   if len(frames_large_update)>0:
-    #     with self.lock:
-    #       nerf_num_frames = self.p_dict['nerf_num_frames']
-    #     logging.info(f"before matches keys: {len(self.bundler._fm._matches)}")
-    #     ks = list(self.bundler._fm._matches.keys())
-    #     for k in ks:
-    #       if k[0] in frames_large_update or k[1] in frames_large_update:
-    #         del self.bundler._fm._matches[k]
-    #         logging.info(f"Delete match between {k[0]._id_str} and {k[1]._id_str}")
-    #     logging.info(f"after matches keys: {len(self.bundler._fm._matches)}")
+    if rematch_after_nerf:
+      if len(frames_large_update)>0:
+        with self.lock:
+          nerf_num_frames = self.p_dict['nerf_num_frames']
+        logging.info(f"before matches keys: {len(self.bundler._fm._matches)}")
+        ks = list(self.bundler._fm._matches.keys())
+        for k in ks:
+          if k[0] in frames_large_update or k[1] in frames_large_update:
+            del self.bundler._fm._matches[k]
+            logging.info(f"Delete match between {k[0]._id_str} and {k[1]._id_str}")
+        logging.info(f"after matches keys: {len(self.bundler._fm._matches)}")
 
-    
-    # if self.SPDLOG>=2 and occ_mask is not None:
-    #   os.makedirs(f'{self.debug_dir}/occ_mask/', exist_ok=True)
-    #   cv2.imwrite(f'{self.debug_dir}/occ_mask/{frame._id_str}.png', occ_mask)
-    
+    self.bundler.saveNewframeResult()
+    if self.SPDLOG>=2 and occ_mask is not None:
+      os.makedirs(f'{self.debug_dir}/occ_mask/', exist_ok=True)
+      cv2.imwrite(f'{self.debug_dir}/occ_mask/{frame._id_str}.png', occ_mask)
 
     ob_in_cam = np.linalg.inv(frame._pose_in_model)
     if self.use_gui:
@@ -690,11 +681,146 @@ class BundleSdf:
         self.gui_dict['K'] = self.K
         self.gui_dict['n_keyframe'] = len(self.bundler._keyframes)
 
-
     self.bundler.saveNewframeResult()
     _frames = self.get_frame_viz(color[...,::-1], mask=mask, ob_in_cam=ob_in_cam, id_str=frame._id_str, K=self.K, n_keyframe=len(self.bundler._keyframes))
-
     return self.bundler._newframe._id_str, ob_in_cam, _frames
+
+
+
+  def run_global_nerf(self, reader=None, get_texture=False, tex_res=1024):
+    '''
+    @reader: data reader, sometimes we want to use the full resolution raw image
+    '''
+    self.K = np.loadtxt(f'{self.debug_dir}/cam_K.txt').reshape(3,3)
+
+    tmp = sorted(glob.glob(f"{self.debug_dir}/ob_in_cam/*"))
+    last_stamp = os.path.basename(tmp[-1]).replace('.txt','')
+    logging.info(f'last_stamp {last_stamp}')
+    keyframes = yaml.load(open(f'{self.debug_dir}/{last_stamp}/keyframes.yml','r'))
+    logging.info(f"keyframes#: {len(keyframes)}")
+    keys = list(keyframes.keys())
+    if len(keyframes)>self.cfg_nerf['n_train_image']:
+      keys = [keys[0]] + list(np.random.choice(keys, self.cfg_nerf['n_train_image'], replace=False))
+      keys = list(set(keys))
+      logging.info(f"frame_ids too large, select subset num: {len(keys)}")
+
+    frame_ids = []
+    for k in keys:
+      frame_ids.append(k.replace('keyframe_',''))
+
+    cam_in_obs = []
+    for k in keys:
+      cam_in_ob = np.array(keyframes[k]['cam_in_ob']).reshape(4,4)
+      cam_in_obs.append(cam_in_ob)
+    cam_in_obs = np.array(cam_in_obs)
+
+    out_dir = f"{self.debug_dir}/final/nerf"
+    os.system(f"rm -rf {out_dir} && mkdir -p {out_dir}")
+    os.system(f'rm -rf {self.debug_dir}/final/used_rgbs/ && mkdir -p {self.debug_dir}/final/used_rgbs/')
+
+    rgbs = []
+    depths = []
+    normal_maps = []
+    masks = []
+    occ_masks = []
+    for frame_id in frame_ids:
+      if reader is not None:
+        self.K = reader.K.copy()
+        id = reader.id_strs.index(frame_id)
+        rgbs.append(reader.get_color(id))
+        depths.append(reader.get_depth(id))
+        masks.append(reader.get_mask(id))
+      else:
+        self.cfg_nerf['down_scale_ratio'] = 1   # Images have been downscaled in tracking outputs
+        rgb_file = f"{self.debug_dir}/color_segmented/{frame_id}.png"
+        shutil.copy(rgb_file, f'{self.debug_dir}/final/used_rgbs/')
+        rgb = imageio.imread(rgb_file)
+        depth = cv2.imread(rgb_file.replace('color_segmented','depth_filtered'),-1)/1e3
+        mask = cv2.imread(rgb_file.replace('color_segmented','mask'),-1)
+        rgbs.append(rgb)
+        depths.append(depth)
+        masks.append(mask)
+
+    glcam_in_obs = cam_in_obs@glcam_in_cvcam
+
+    self.cfg_nerf['sc_factor'] = None
+    self.cfg_nerf['translation'] = None
+
+    ######### Reuse normalization
+    files = sorted(glob.glob(f"{self.debug_dir}/**/nerf/config.yml", recursive=True))
+    if len(files)>0:
+      tmp = yaml.load(open(files[-1],'r'))
+      self.cfg_nerf['sc_factor'] = float(tmp['sc_factor'])
+      self.cfg_nerf['translation'] = np.array(tmp['translation'])
+
+    sc_factor,translation,pcd_real_scale, pcd_normalized = compute_scene_bounds(None,glcam_in_obs,self.K,use_mask=True,base_dir=self.cfg_nerf['save_dir'],rgbs=np.array(rgbs),depths=np.array(depths),masks=np.array(masks), cluster=True, eps=0.01, min_samples=5, sc_factor=self.cfg_nerf['sc_factor'], translation_cvcam=self.cfg_nerf['translation'])
+
+    self.cfg_nerf['sc_factor'] = float(sc_factor)
+    self.cfg_nerf['translation'] = translation
+
+    if normal_maps is not None and len(normal_maps)>0:
+      normal_maps = np.array(normal_maps)
+    else:
+      normal_maps = None
+
+    rgbs_raw = np.array(rgbs).copy()
+    rgbs,depths,masks,normal_maps,poses = preprocess_data(np.array(rgbs),depths=np.array(depths),masks=np.array(masks),normal_maps=normal_maps,poses=glcam_in_obs,sc_factor=self.cfg_nerf['sc_factor'],translation=self.cfg_nerf['translation'])
+
+    self.cfg_nerf['sampled_frame_ids'] = np.arange(len(rgbs))
+
+    np.savetxt(f"{self.cfg_nerf['save_dir']}/trainval_poses.txt",glcam_in_obs.reshape(-1,4))
+
+    if len(occ_masks)>0:
+      occ_masks = np.array(occ_masks)
+    else:
+      occ_masks = None
+
+    nerf = NerfRunner(self.cfg_nerf,rgbs,depths=depths,masks=masks,normal_maps=normal_maps,occ_masks=occ_masks,poses=poses,K=self.K,build_octree_pcd=pcd_normalized)
+    print("Start training")
+    nerf.train()
+    optimized_cvcam_in_obs,offset = get_optimized_poses_in_real_world(poses,nerf.models['pose_array'],self.cfg_nerf['sc_factor'],self.cfg_nerf['translation'])
+
+    ####### Log
+    os.system(f"cp -r {self.cfg_nerf['save_dir']}/image_step_*.png  {out_dir}/")
+    with open(f"{out_dir}/config.yml",'w') as ff:
+      tmp = copy.deepcopy(self.cfg_nerf)
+      for k in tmp.keys():
+        if isinstance(tmp[k],np.ndarray):
+          tmp[k] = tmp[k].tolist()
+      yaml.dump(tmp,ff)
+    shutil.copy(f"{out_dir}/config.yml",f"{self.cfg_nerf['save_dir']}/")
+    os.system(f"mv {self.cfg_nerf['save_dir']}/*  {out_dir}/ && rm -rf {out_dir}/step_*_mesh_real_world.obj {out_dir}/*frame*ray*.ply")
+
+    torch.cuda.empty_cache()
+
+    np.savetxt(f"{self.debug_dir}/{frame_id}/poses_after_nerf.txt",np.array(optimized_cvcam_in_obs).reshape(-1,4))
+
+    # mesh_files = sorted(glob.glob(f"{self.debug_dir}/final/nerf/step_*_mesh_normalized_space.obj"))
+    # mesh = trimesh.load(mesh_files[-1])
+
+    mesh,sigma,query_pts = nerf.extract_mesh(voxel_size=self.cfg_nerf['mesh_resolution'],isolevel=0, return_sigma=True)
+    mesh.merge_vertices()
+    ms = trimesh_split(mesh, min_edge=100)
+    largest_size = 0
+    largest = None
+    for m in ms:
+      # mean = m.vertices.mean(axis=0)
+      # if np.linalg.norm(mean)>=0.1*nerf.cfg['sc_factor']:
+      #   continue
+      if m.vertices.shape[0]>largest_size:
+        largest_size = m.vertices.shape[0]
+        largest = m
+    mesh = largest
+    mesh.export(f'{self.debug_dir}/mesh_cleaned.obj')
+
+    if get_texture:
+      mesh = nerf.mesh_texture_from_train_images(mesh, rgbs_raw=rgbs_raw, train_texture=False, tex_res=tex_res)
+
+    mesh = mesh_to_real_world(mesh, pose_offset=offset, translation=self.cfg_nerf['translation'], sc_factor=self.cfg_nerf['sc_factor'])
+    mesh.export(f'{self.debug_dir}/textured_mesh.obj')
+
+
+
 
 
 if __name__=="__main__":
@@ -710,7 +836,7 @@ if __name__=="__main__":
   tracker = BundleSdf(cfg_track_dir=cfg_track_dir)
   reader = Ho3dReader(tracker.bundler.yml["data_dir"].Scalar())
 
-  # os.system(f"rm -rf {tracker.debug_dir} && mkdir -p {tracker.debug_dir}")
+  os.system(f"rm -rf {tracker.debug_dir} && mkdir -p {tracker.debug_dir}")
 
   for i,color_file in enumerate(reader.color_files):
     color = cv2.imread(color_file)
