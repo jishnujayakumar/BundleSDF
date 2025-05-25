@@ -46,7 +46,7 @@
  
    const std::string port = (*yml)["nerf_port"].as<std::string>();
    _socket.connect("tcp://0.0.0.0:"+port);
-   SPDLOG("Connected to nerf_port {}", port);
+   //  SPDLOG("Connected to nerf_port {}", port);
  
    _fm = std::make_shared<GluNet>(yml, this);
  
@@ -56,7 +56,7 @@
  
  Bundler::~Bundler()
  {
-   SPDLOG("Destructor");
+   //  SPDLOG("Destructor");
  }
  
  bool Bundler::forgetFrame(const std::shared_ptr<Frame> &f)
@@ -64,7 +64,7 @@
    if (f==NULL) return false;
    if (std::find(_keyframes.begin(),_keyframes.end(),f)==_keyframes.end())
    {
-     SPDLOG("forgetting frame {}",f->_id_str);
+     //  SPDLOG("forgetting frame {}",f->_id_str);
      _fm->forgetFrame(f);
      _frames.erase(f->_id);
      return true;
@@ -76,7 +76,7 @@
  void Bundler::processNewFrame(std::shared_ptr<Frame> frame)
  {
    std::cout<<"\n\n";
-   SPDLOG("New frame {}",frame->_id_str);
+   //  SPDLOG("New frame {}",frame->_id_str);
    _newframe = frame;
  
    const std::string out_dir = (*yml)["debug_dir"].as<std::string>()+frame->_id_str+"/";
@@ -104,7 +104,7 @@
    if (frame->_id==0 && (frame->_pose_in_model-Eigen::Matrix4f::Identity()).norm()<1e-3)
    {
      frame->setNewInitCoordinate();  // Move first frame object cloud origin to center
-     SPDLOG("Set new coordinate frame");
+     //  SPDLOG("Set new coordinate frame");
    }
  
    int n_fg = 0;
@@ -118,11 +118,11 @@
        }
      }
    }
-   SPDLOG("n_fg: {}",n_fg);
+   //  SPDLOG("n_fg: {}",n_fg);
    if (n_fg<100)
    {
      frame->_status = Frame::FAIL;
-     SPDLOG("Frame {} cloud is empty, marked FAIL, roi={}", frame->_id_str,n_fg);
+     //  SPDLOG("Frame {} cloud is empty, marked FAIL, roi={}", frame->_id_str,n_fg);
      forgetFrame(frame);
      return;
    }
@@ -136,10 +136,10 @@
  
    int n_valid = frame->countValidPoints();
    int n_valid_first = _firstframe->countValidPoints();
-   SPDLOG("n_valid/n_valid_first: {}/{}={}", n_valid, n_valid_first, float(n_valid)/n_valid_first);
+   //  SPDLOG("n_valid/n_valid_first: {}/{}={}", n_valid, n_valid_first, float(n_valid)/n_valid_first);
    if (n_valid < n_valid_first/40.0)
    {
-     SPDLOG("frame _cloud_down points#: {} too small compared to first frame points# {}, mark as FAIL",n_valid,n_valid_first);
+     //  SPDLOG("frame _cloud_down points#: {} too small compared to first frame points# {}, mark as FAIL",n_valid,n_valid_first);
      frame->_status = Frame::FAIL;
      forgetFrame(frame);
      return;
@@ -159,7 +159,7 @@
    }
    catch (const std::exception &e)
    {
-     SPDLOG("frame {} marked as FAIL since feature detection failed, ERROR: {}", frame->_id_str, e.what());
+     //  SPDLOG("frame {} marked as FAIL since feature detection failed, ERROR: {}", frame->_id_str, e.what());
      frame->_status = Frame::FAIL;
      forgetFrame(frame);
      return;
@@ -172,7 +172,7 @@
      _fm->findCorres(frame, ref_frame);
      if (_fm->_matches[{frame,ref_frame}].size()<min_match_with_ref)  // Find new reference frame from keyframes
      {
-       SPDLOG("frame {} with last frame failed, re-choose new reference from keyframes",frame->_id_str);
+       //  SPDLOG("frame {} with last frame failed, re-choose new reference from keyframes",frame->_id_str);
        std::vector<float> visibles;
        for (const auto &kf:_keyframes)
        {
@@ -190,7 +190,7 @@
          _fm->findCorres(frame, kf);
          if (_fm->_matches[{frame,kf}].size()>=min_match_with_ref)
          {
-           SPDLOG("re-choose new ref frame to {}",kf->_id_str);
+           //  SPDLOG("re-choose new ref frame to {}",kf->_id_str);
            found = true;
            break;
          }
@@ -198,7 +198,7 @@
        if (!found)
        {
          frame->_status = Frame::FAIL;
-         SPDLOG("frame {} has not enough corres with ref_frame or any keyframe, mark as FAIL",frame->_id_str);
+         //  SPDLOG("frame {} has not enough corres with ref_frame or any keyframe, mark as FAIL",frame->_id_str);
          forgetFrame(frame);
          return;
        }
@@ -210,10 +210,10 @@
        return;
      }
  
-     SPDLOG("frame {} pose update before\n{}", frame->_id_str, frame->_pose_in_model);
+     //  SPDLOG("frame {} pose update before\n{}", frame->_id_str, frame->_pose_in_model);
      Eigen::Matrix4f offset = _fm->procrustesByCorrespondence(frame, ref_frame);
      frame->_pose_in_model = offset * frame->_pose_in_model;
-     SPDLOG("frame {} pose update after\n{}", frame->_id_str, frame->_pose_in_model);
+     //  SPDLOG("frame {} pose update after\n{}", frame->_id_str, frame->_pose_in_model);
    }
  
    if (frame->_status==Frame::FAIL)
@@ -230,7 +230,7 @@
        bool isforget = forgetFrame(h.second);
        if (isforget)
        {
-         SPDLOG("exceed window size, forget frame {}",h.second->_id_str);
+         //  SPDLOG("exceed window size, forget frame {}",h.second->_id_str);
          break;
        }
      }
@@ -265,7 +265,7 @@
    if (frame->_id==0)
    {
      _keyframes.push_back(frame);
-     SPDLOG("Added frame {} as keyframe, current #keyframe: {}", frame->_id_str, _keyframes.size());
+     //  SPDLOG("Added frame {} as keyframe, current #keyframe: {}", frame->_id_str, _keyframes.size());
      return true;
    }
    if (frame->_status!=Frame::OTHER) return false;
@@ -277,7 +277,7 @@
  
    if (frame->_keypts.size()<min_feat_num)
    {
-     SPDLOG("frame {} not selected as keyframe since its kpts size is {}", frame->_id_str, frame->_keypts.size());
+     //  SPDLOG("frame {} not selected as keyframe since its kpts size is {}", frame->_id_str, frame->_keypts.size());
      return false;
    }
  
@@ -285,7 +285,7 @@
    int n_first_valid = _firstframe->countValidPoints();
    if (n_valid<n_first_valid/10.0)
    {
-     SPDLOG("frame {} not selected as keyframe, valid pts# {} too small compared to {}", n_valid, n_first_valid);
+     //  SPDLOG("frame {} not selected as keyframe, valid pts# {} too small compared to {}", n_valid, n_first_valid);
      return false;
    }
  
@@ -299,7 +299,7 @@
      float trans_diff = (cur_pose.inverse().block(0,3,3,1)-k_pose.inverse().block(0,3,3,1)).norm();
      if (rot_diff<min_rot)
      {
-       SPDLOG("frame {} not selected as keyframe since its rot diff with frame {} is {} deg", frame->_id_str, kf->_id_str, rot_diff/M_PI*180);
+       //  SPDLOG("frame {} not selected as keyframe since its rot diff with frame {} is {} deg", frame->_id_str, kf->_id_str, rot_diff/M_PI*180);
        return false;
      }
    }
@@ -311,13 +311,13 @@
      float visible = computeCovisibility(_newframe, kf);
      if (visible>min_visible)
      {
-       SPDLOG("frame {} not selected as keyframe since share visible {} with frame {}", _newframe->_id_str, visible, kf->_id_str);
+       //  SPDLOG("frame {} not selected as keyframe since share visible {} with frame {}", _newframe->_id_str, visible, kf->_id_str);
        return false;
      }
    }
  
    _keyframes.push_back(frame);
-   SPDLOG("Added frame {} as keyframe, current #keyframe: {}", frame->_id_str, _keyframes.size());
+   //  SPDLOG("Added frame {} as keyframe, current #keyframe: {}", frame->_id_str, _keyframes.size());
    return true;
  
  }
@@ -331,7 +331,7 @@
    const int min_fm_edges_newframe = (*yml)["bundle"]["min_fm_edges_newframe"].as<int>();
  
    std::sort(frames.begin(), frames.end(), FramePtrComparator());
-   printf("#optimizeGPU frames=%d, #keyframes=%d, #_frames=%d\n",frames.size(),_keyframes.size(),_frames.size());
+  //  printf("#optimizeGPU frames=%d, #keyframes=%d, #_frames=%d\n",frames.size(),_keyframes.size(),_frames.size());
    for (int i=0;i<frames.size();i++)
    {
      std::cout<<frames[i]->_id_str<<" ";
@@ -432,7 +432,7 @@
    std::set<std::shared_ptr<Frame>, FramePtrComparator> frames = {_newframe};
    const auto &debug_dir = (*yml)["debug_dir"].as<std::string>();
    const int max_BA_frames = (*yml)["bundle"]["max_BA_frames"].as<int>();
-   SPDLOG("total keyframes={}, want to select {}", _keyframes.size(), max_BA_frames);
+   //  SPDLOG("total keyframes={}, want to select {}", _keyframes.size(), max_BA_frames);
    if (_keyframes.size()+frames.size()<=max_BA_frames)
    {
      for (const auto &kf:_keyframes)
@@ -487,7 +487,7 @@
      }
  
      std::vector<int> ids = Utils::vectorArgsort(rot_dists, true);
-     SPDLOG("ids#={}, max_BA_frames-frames.size()={}",ids.size(), max_BA_frames-frames.size());
+     //  SPDLOG("ids#={}, max_BA_frames-frames.size()={}",ids.size(), max_BA_frames-frames.size());
      for (int i=0;i<ids.size();i++)
      {
        frames.insert(tmp_frames[ids[i]]);
@@ -496,7 +496,7 @@
          break;
        }
      }
-     SPDLOG("frames#={}",frames.size());
+     //  SPDLOG("frames#={}",frames.size());
    }
    else if (method=="normal_orientation_nearest")
    {
@@ -510,10 +510,10 @@
        // float visible = computeCovisibilityCuda(_newframe, kf);
        float visible = computeCovisibility(_newframe, kf);
        visibles[i] = visible;
-       // SPDLOG("{} and {} visible: {}", _newframe->_id_str, kf->_id_str, visible);
+       // //  SPDLOG("{} and {} visible: {}", _newframe->_id_str, kf->_id_str, visible);
      }
      std::vector<int> ids = Utils::vectorArgsort(visibles, false);
-     SPDLOG("ids#={}, max_BA_frames-frames.size()={}",ids.size(), max_BA_frames-frames.size());
+     //  SPDLOG("ids#={}, max_BA_frames-frames.size()={}",ids.size(), max_BA_frames-frames.size());
      for (int i=0;i<ids.size();i++)
      {
        frames.insert(_keyframes[ids[i]]);
@@ -522,7 +522,7 @@
          break;
        }
      }
-     SPDLOG("frames#={}",frames.size());
+     //  SPDLOG("frames#={}",frames.size());
    }
    else if (method=="normal_orientation_greedy")
    {
@@ -747,7 +747,7 @@
  
  void Bundler::optimizationGlobal()
  {
-   SPDLOG("start global optimization");
+   //  SPDLOG("start global optimization");
    _global_optimzation_id = std::this_thread::get_id();
  
    while (1)
@@ -790,16 +790,16 @@
        if (_fm->_matches.find({fA, fB})==_fm->_matches.end() && fA->_pose_in_model!=Eigen::Matrix4f::Identity())
        {
          float visible = computeCovisibility(fA, fB);
-         SPDLOG("frame {} and {} visible={}",fA->_id_str,fB->_id_str,visible);
+         //  SPDLOG("frame {} and {} visible={}",fA->_id_str,fB->_id_str,visible);
          if (visible<(*yml)["bundle"]["non_neighbor_min_visible"].as<float>())
          {
-           SPDLOG("frame {} and {} visible={} skip matching",fA->_id_str,fB->_id_str,visible);
+           //  SPDLOG("frame {} and {} visible={} skip matching",fA->_id_str,fB->_id_str,visible);
            _fm->_matches[{fA,fB}].clear();
            continue;
          }
  
          pairs.push_back({fA, fB});
-         SPDLOG("add frame ({}, {}) into pairs", fA->_id_str, fB->_id_str);
+         //  SPDLOG("add frame ({}, {}) into pairs", fA->_id_str, fB->_id_str);
        }
      }
    }
@@ -814,7 +814,7 @@
    const int min_fm_edges_newframe = (*yml)["bundle"]["min_fm_edges_newframe"].as<int>();
  
    std::sort(frames.begin(), frames.end(), FramePtrComparator());
-   printf("#optimizeGPU frames=%d, #keyframes=%d, #_frames=%d\n",frames.size(),_keyframes.size(),_frames.size());
+  //  printf("#optimizeGPU frames=%d, #keyframes=%d, #_frames=%d\n",frames.size(),_keyframes.size(),_frames.size());
    for (int i=0;i<frames.size();i++)
    {
      std::cout<<frames[i]->_id_str<<" ";
@@ -849,7 +849,7 @@
          if (_fm->_matches.find({frameA, frameB})==_fm->_matches.end())
          {
            pairs.push_back({frameA, frameB});
-           SPDLOG("add frame ({}, {}) into pairs", frameA->_id_str, frameB->_id_str);
+           //  SPDLOG("add frame ({}, {}) into pairs", frameA->_id_str, frameB->_id_str);
          }
        }
      }
@@ -891,7 +891,7 @@
  
    if (global_corres.size()==0)
    {
-     SPDLOG("frame {} few global_corres, mark as FAIL",_newframe->_id_str);
+     //  SPDLOG("frame {} few global_corres, mark as FAIL",_newframe->_id_str);
      _newframe->_status = Frame::FAIL;
    }
  
@@ -917,11 +917,11 @@
  
    saveFramesCloud(frames, "optCUDA_before");
  
-   SPDLOG("OptimizerGPU begin, global_corres#={}",global_corres.size());
+   //  SPDLOG("OptimizerGPU begin, global_corres#={}",global_corres.size());
    OptimizerGpu opt(yml);
    opt._id_str = _newframe->_id_str;
    opt.optimizeFrames(global_corres, n_match_per_pair, frames.size(), H, W, depths_gpu, colors_gpu, normals_gpu, update_pose_flags, poses, frames[0]->_K);
-   SPDLOG("OptimizerGPU finish");
+   //  SPDLOG("OptimizerGPU finish");
  
    /////////If the newframe has abnormal pose change
    if (_newframe->_ref_frame_id==_newframe->_id-1 && _frames.find(_newframe->_ref_frame_id)!=_frames.end())
@@ -958,7 +958,7 @@
  
  void Bundler::saveNewframeResult()
  {
-   SPDLOG("Welcome saveNewframeResult");
+   //  SPDLOG("Welcome saveNewframeResult");
    std::string K_file = fmt::format("{}/cam_K.txt",(*yml)["debug_dir"].as<std::string>());
    const std::string debug_dir = (*yml)["debug_dir"].as<std::string>();
    const std::string out_dir = debug_dir+_newframe->_id_str+"/";
@@ -1107,7 +1107,7 @@
      pcl::io::savePLYFile(out_dir+"cloud_world_gt.ply",*cloud_world_gt);
    }
  
-   SPDLOG("saveNewframeResult done");
+   //  SPDLOG("saveNewframeResult done");
  }
  
  
@@ -1129,7 +1129,7 @@
      Utils::downsamplePointCloud(frame->_cloud, cloud, 0.001);
      pcl::transformPointCloudWithNormals(*cloud, *cloud, frame->_pose_in_model);
      pcl::io::savePLYFile(out_dir+prefix+"_"+frame->_id_str+".ply", *cloud);
-     SPDLOG("Save to {}",out_dir+prefix+"_"+frame->_id_str+".ply");
+     //  SPDLOG("Save to {}",out_dir+prefix+"_"+frame->_id_str+".ply");
    }
  };
  
@@ -1161,7 +1161,7 @@
    {
      s += f->_id_str+" ";
    }
-   SPDLOG(s);
+   //  SPDLOG(s);
  
    const std::string out_dir = fmt::format("{}/{}",(*yml)["debug_dir"].as<std::string>(),foldername);
    system(fmt::format("rm -rf {} && mkdir -p {}",out_dir,out_dir).c_str());
@@ -1198,7 +1198,7 @@
        }
        if (_fm->_matches.find({fj,fi})==_fm->_matches.end())
        {
-         SPDLOG("{} and {} no feature matches found",fj->_id_str,fi->_id_str);
+         //  SPDLOG("{} and {} no feature matches found",fj->_id_str,fi->_id_str);
          continue;
        }
        const auto &matches = _fm->_matches[{fj,fi}];
@@ -1211,13 +1211,13 @@
        ff.close();
      }
    }
-   SPDLOG("saved global frames results");
+   //  SPDLOG("saved global frames results");
  }
  
  
  void Bundler::runNerf(std::vector<std::shared_ptr<Frame>> &frames)
  {
-   SPDLOG("NERF start");
+   //  SPDLOG("NERF start");
    const std::string debug_dir = (*yml)["debug_dir"].as<std::string>();
  
    /////////// Write images to load by NERF
@@ -1299,10 +1299,10 @@
      ff.close();
    }
  
-   SPDLOG("zmq start waiting for reply");
+   //  SPDLOG("zmq start waiting for reply");
    std::vector<zmq::message_t> recv_msgs;
    zmq::recv_multipart(_socket, std::back_inserter(recv_msgs));
-   SPDLOG("zmq got reply");
+   //  SPDLOG("zmq got reply");
    std::vector<float> optimized_pose_data(frames.size()*16);
    std::memcpy(optimized_pose_data.data(), recv_msgs[0].data(), optimized_pose_data.size()*sizeof(float));
  
@@ -1328,7 +1328,7 @@
      }
      ff.close();
    }
-   SPDLOG("NERF done");
+   //  SPDLOG("NERF done");
  
  }
  
