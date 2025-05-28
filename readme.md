@@ -4,8 +4,9 @@
 
 # Docker/Environment setup
 - Start a docker container the first time
-```
-cd docker && bash run_container.sh
+```shell
+# place your ROS_MASTER_URI and ROS_HOSTNAME
+cd docker && bash run_container.sh <ROS_MASTER_URI> <ROS_HOSTNAME>
 
 docker exec -it bundlesdf bash
 
